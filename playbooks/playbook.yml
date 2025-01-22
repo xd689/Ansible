@@ -1,0 +1,118 @@
+---
+- hosts: all
+  become: true
+  vars_files:
+    - /home/user/vars/default.yml
+
+  tasks:
+
+    - name: Install Apache
+      apt:
+        name: apache2
+        update_cache: yes
+        state: latest
+
+    - name: Create document root
+      file:
+        path: "/var/www/{{http_host}}"
+        state: directory
+        owner: "{{app_user}}"
+        mode: '0755'
+
+    - name: Copy index test page
+      template:
+        src: "/home/user/files/apache2.html.j2"
+        dest: "/var/www/{{http_host}}"
+
+    - name: Set up Apache virtualHost
+      template:
+        src: "/home/user/files/apache.conf.j2"
+        dest: "/etc/apache2/sites-available/{{http_conf}}"
+
+    - name: Replace ports listening
+      replace:
+        path: /etc/apache2/ports.conf
+        regexp: '^Listen 80'
+        replace: 'Listen 8080'
+
+    - name: Disable default Apache site
+      shell: /usr/sbin/a2dissite 000-default.conf
+      notify: Reload Apache
+
+    - name: Disable default Apache site symlink
+      file:
+        path: /etc/apache2/sites-enabled/000-default.conf
+        state: absent
+      notify: Reload Apache
+
+    - name: Create link for Apache site
+      file:
+        src: "/etc/apache2/sites-available/{{http_conf}}"
+        dest: "/etc/apache2/sites-enabled/{{http_conf}}"
+        state: link
+      notify: Reload Apache
+
+    - name: Enable new site
+      shell: /usr/sbin/a2ensite {{http_conf}}
+      notify: Reload Apache
+
+    - name: Install Nginx
+      apt:
+        name: nginx
+        update_cache: yes
+        state: latest
+
+    - name: Generate SSL certificate
+      shell: >
+        openssl req -x509 -nodes -days 3650 -newkey rsa:2048 -keyout /etc/ssl/private/sw.key -out /etc/ssl/certs/sw.crt -subj "/CN=sw"
+
+    - name: Disable nginx default site symlink
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: Reload Nginx
+
+    - name: Copy Nginx configuration file
+      copy:
+        src: "/home/user/files/proxy"
+        dest: "/etc/nginx/sites-available/{{nginx_conf}}"
+        owner: "{{app_user}}"
+        mode: '0755'
+
+    - name: Create link for Nginx site
+      file:
+        src: "/etc/nginx/sites-available/proxy"
+        dest: "/etc/nginx/sites-enabled/proxy"
+        state: link
+      notify: Reload Nginx
+
+    - name: Restart Apache lastly
+      service:
+        name: apache2
+        state: restarted
+
+    - name: Restart Nginx lastly
+      service:
+        name: nginx
+        state: restarted
+
+  handlers:
+    - name: Reload Apache
+      service:
+        name: apache2
+        state: reloaded
+
+    - name: Restart Apache
+      service:
+        name: apache2
+        state: restarted
+
+    - name: Reload Nginx
+      service:
+        name: nginx
+        state: reloaded
+
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted

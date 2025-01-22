@@ -1,0 +1,14 @@
+# El nombre de host usado por Apache y Nginx
+http_host: sw
+
+# Usuario de la aplicación que tendrá permisos sobre los directorios
+app_user: www-data
+
+# Nombre del archivo de configuración de Apache
+http_conf: apache.conf
+
+# Deshabilitar el sitio por defecto de Apache
+disable_default: true
+
+# Nombre del archivo de configuración de Nginx
+nginx_conf: proxy
