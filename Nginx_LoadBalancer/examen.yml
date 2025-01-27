@@ -1,0 +1,187 @@
+---
+- name: Configurar Nginx con HTTPS y balanceo de carga hacia servidores Apache en el puerto 8080
+  hosts: localhost
+  connection: local
+  become: true
+  vars_files:
+    - vars/proxy.yml
+  vars_prompt:
+
+    - name: s1ip
+      prompt: "IP servidor1"
+      private: false
+
+    - name: ws1
+      prompt: "Distribución de carga s1"
+      private: false
+
+    - name: s2ip
+      prompt: "IP servidor2"
+      private: false
+
+    - name: ws2
+      prompt: "Distribución de carga s2"
+      private: false
+
+    - name: bckport
+      prompt: "Backend port"
+      private: false
+
+  tasks:
+
+    #Apache Configuration
+
+    - name: Install LAMP Packages
+      apt: name={{ item }} update_cache=yes state=latest
+      loop: [ 'apache2' ]
+
+    - name: Create document root s1
+      file:
+        path: "/var/www/s1"
+        state: directory
+        owner: "www-data"
+        group: "www-data"
+        mode: '0755'
+
+    - name: Create document root s2
+      file:
+        path: "/var/www/s2"
+        state: directory
+        owner: "www-data"
+        group: "www-data"
+        mode: '0755'
+
+    - name: Set up Apache virtualhost s1
+      template:
+        src: "files/s1.conf.j2"
+        dest: "/etc/apache2/sites-available/s1.conf"
+      notify: Reload Apache
+
+    - name: Set up Apache virtualhost s2
+      template:
+        src: "files/s2.conf.j2"
+        dest: "/etc/apache2/sites-available/s2.conf"
+      notify: Reload Apache
+
+    - name: Enable new site s1
+      shell: /usr/sbin/a2ensite s1.conf
+      notify: Reload Apache
+
+    - name: Enable new site s2
+      shell: /usr/sbin/a2ensite s2.conf
+      notify: Reload Apache
+
+    - name: Disable default Apache site
+      shell: /usr/sbin/a2dissite 000-default.conf
+      notify: Reload Apache
+
+    - name: Change listen port
+      lineinfile:
+        path: /etc/apache2/ports.conf
+        regexp: '^Listen 80'
+        line: 'Listen 8080'
+
+    - name: Sets Up s1 index.html
+      template:
+        src: "files/s1.html"
+        dest: "/var/www/s1/index.html"
+
+    - name: Sets Up s2 index.html
+      template:
+        src: "files/s2.html"
+        dest: "/var/www/s2/index.html"
+
+    - name: Instalar Nginx y OpenSSL
+      apt:
+        name:
+          - nginx
+          - openssl
+        state: present
+        update_cache: true
+
+    - name: Crear certificado SSL autofirmado
+      command:
+        cmd: >
+          openssl req -x509 -nodes -days 365 -newkey rsa:2048
+          -keyout {{ ssl_certificate_key_path }}
+          -out {{ ssl_certificate_path }}
+          -subj "/C=ES/ST=Cordoba/L=Cordoba/O=2SIR/OU=IAW/CN=vb"
+        creates: "{{ ssl_certificate_path }}"
+
+    - name: Crear archivo de configuracion de Nginx
+      ansible.builtin.copy:
+        dest: /etc/nginx/sites-available/proxy
+        content: |
+          upstream backend_servers {
+              server {{ s1ip }}:{{ bckport }}  weight={{ ws1 }};
+              server {{ s2ip }}:{{ bckport }}  weight={{ ws2 }};
+          }
+
+          server {
+              listen 80;
+              server_name localhost;
+
+              # return 301 https://$host$request_uri;
+              return 301 https://vb;
+          }
+
+          server {
+              listen 443 ssl;
+              server_name vb;
+
+              ssl_certificate {{ ssl_certificate_path }};
+              ssl_certificate_key {{ ssl_certificate_key_path }};
+
+              location / {
+                  proxy_pass http://backend_servers;
+                  proxy_set_header Host $host;
+                  proxy_set_header X-Real-IP $remote_addr;
+                  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                  proxy_set_header X-Forwarded-Proto $scheme;
+              }
+          }
+
+    - name: Crear enlace simbolico para habilitar la configuracion
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/proxy
+        dest: /etc/nginx/sites-enabled/proxy
+        state: link
+
+    - name: Eliminar el enlace simbolico del sitio por defecto
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: Restart Apache lastly
+      service:
+        name: apache2
+        state: restarted
+
+    - name: Restart Nginx lastly
+      service:
+        name: nginx
+        state: restarted
+
+  handlers:
+
+    - name: Restart Apache
+      service:
+        name: apache2
+        state: restarted
+
+    - name: Reload Apache
+      service:
+        name: apache2
+        state: reloaded
+
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted
+        enabled: true
+
+    - name: Reload Nginx
+      service:
+        name: nginx
+        state: reloaded
+        enabled: true

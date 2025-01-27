@@ -1,0 +1,7 @@
+SERVIDOR WORDPRESS HTTP
+Ejecución:
+Como usuario root:
+ ansible-playbook playbook.yml 
+Como usuario sudoers:
+ sudo ansible-playbook playbook.yml 
+
