@@ -17,21 +17,21 @@
     - vars/vars.yml
 
   tasks:
-    - name: Añadir dominio wp a /etc/hosts en servidor
+    - name: Add wp domain to /etc/hosts to server
       ansible.builtin.lineinfile:
         path: /etc/hosts
         insertafter: "127.0.0.1 localhost"
         line: "127.0.0.1 {{ wpDomain }}"
       when: action in ["0", "2"]
 
-    - name: Añadir dominio nc a /etc/hosts en servidor
+    - name: Add nc domain to /etc/hosts to server
       ansible.builtin.lineinfile:
         path: /etc/hosts
         insertafter: "127.0.0.1 localhost"
         line: "127.0.0.1 {{ ncDomain }}"
-      when: action in ["1", "2"]
+      when: action in ["0", "2"]
 
-    - name: Actualizar repositorios
+    - name: Update packages
       apt:
         name: aptitude
         update_cache: yes
@@ -39,7 +39,7 @@
         force_apt_get: yes
       tags: [ system ]
     
-    - name: Instalación de LAMP
+    - name: LAMP Install
       apt: 
         name: "{{ item }}"
         update_cache: yes
@@ -47,7 +47,7 @@
       loop: [ 'apache2', 'mariadb-server', 'python3-pymysql', 'php', 'php-mysql', 'libapache2-mod-php' ]
       tags: [ system ]
     
-    - name: Instalar extensiones de PHP
+    - name: PHP Extension install
       apt: 
         name: "{{ item }}"
         update_cache: yes
@@ -55,7 +55,7 @@
       loop: "{{ phpModules }}"
       tags: [ system ]
 
-    - name: Puerto Apache2 a 8080
+    - name: Apache2 port to 8080
       lineinfile:
         path: /etc/apache2/ports.conf
         regexp: '^Listen 80'
@@ -101,27 +101,27 @@
       become: yes
       tags: [ phpmyadmin ]
      
-    - name: Step 1 phpmyadmin
+    - name: Step 1 PhpMyAdmin
       debconf: name=phpmyadmin question='phpmyadmin/dbconfig-install' value='true' vtype='boolean'
       tags: [ phpmyadmin ]
 
-    - name: Step 2 phpmyadmin
+    - name: Step 2 PhpMyAdmin
       debconf: name=phpmyadmin question='phpmyadmin/app-password-confirm' value='{{mysqlRootPassword}}' vtype='password'
       tags: [ phpmyadmin ]
 
-    - name: Step 3 phpmyadmin
+    - name: Step 3 PhpMyAdmin
       debconf: name=phpmyadmin question='phpmyadmin/mysql/admin-pass' value='{{mysqlRootPassword}}' vtype='password'
       tags: [ phpmyadmin ]
 
-    - name: Step 4 phpmyadmin
+    - name: Step 4 PhpMyAdmin
       debconf: name=phpmyadmin question='phpmyadmin/mysql/app-pass' value='{{mysqlRootPassword}}' vtype='password'
       tags: [ phpmyadmin ]
 
-    - name: Step 5 phpmyadmin
+    - name: Step 5 PhpMyAdmin
       debconf: name=phpmyadmin question='phpmyadmin/reconfigure-webserver' value='' vtype='multiselect'
       tags: [ phpmyadmin ]
 
-    - name: Step 6 phpmyadmin
+    - name: Step 6 PhpMyAdmin
       apt: pkg=phpmyadmin state=present
       tags: [ phpmyadmin ]      
 
@@ -135,7 +135,7 @@
         line: "Include /etc/phpmyadmin/apache.conf"      
       tags: [ phpmyadmin ]
 
-    - name: Crear archivo .htaccess
+    - name: Create File .htaccess
       copy:
         dest: "{{ phpmyadmin_dir }}/.htaccess"
         content: |
@@ -148,7 +148,7 @@
         mode: 0640
       tags: [ htaccess ]
 
-    - name: Crear archivo .htaccess
+    - name: Create File .htaccess
       copy:
         dest: "{{ phpmyadmin_dir }}/.htaccess"
         content: |
@@ -168,7 +168,7 @@
       become: yes
       tags: [ htaccess ]
 
-    - name: Crear usuario en .htpasswd
+    - name: Create user in file .htpasswd
       htpasswd:
         path: "{{ htpasswd_file }}"
         name: "{{ auth_user }}"
@@ -178,7 +178,7 @@
         create: yes
       tags: [ htaccess ]
 
-    - name: Asegurar permisos del .htpasswd
+    - name: Secure .htpasswd privileges
       file:
         path: "{{ htpasswd_file }}"
         owner: www-data
@@ -186,7 +186,7 @@
         mode: 0640
       tags: [ htaccess ]
 
-    - name: Asegurar permisos del .htpasswd
+    - name: Secure .htpasswd privileges
       file:
         path: "{{ htpasswd_file }}"
         owner: www-data
@@ -194,7 +194,7 @@
         mode: 0640
       tags: [ htaccess ]
 
-    - name: Añadir AllowOverride All al directorio de phpMyAdmin
+    - name: Add "AllowOverride All" to PhpMyAdmin directory
       lineinfile:
         path: "{{ phpmyadmin_conf }}"
         insertafter: '^<Directory /usr/share/phpmyadmin>'
@@ -203,11 +203,11 @@
       tags: [ htaccess
        ]
 
-    - name: Ejecutar instalación de WordPress
+    - name: Execute WordPress install
       import_tasks: "includes/subWordpress.yml"
       when: action in ["0", "2"]
 
-    - name: Ejecutar instalación de Nextcloud
+    - name: Execute Nextcloud install
       import_tasks: "includes/subNextcloud.yml"
       when: action in ["1", "2"]
 
@@ -217,12 +217,12 @@
         update_cache: yes
         state: latest
       tags: [ system ]
-
-    - name: Crear un certificado SSL autofirmado
+      
+    - name: Create self-signes SSL certificate
       command: >
         openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/ssl/private/nginx-selfsigned.key
         -out /etc/ssl/certs/nginx-selfsigned.crt
-        -subj "/C=ES/ST=Cordoba/L=Cordoba/O=ASIR/OU=fRAnRoDrIgUEzSeXY/CN={{ commonNames[action|int+0] }}"
+        -subj "/C=ES/ST=Córdoba/L=Córdoba/O=ASIR/OU=PedroSeMatara/CN={{ commonNames[action|int+0] }}"
       #delegate_to: "localhost"
       become: yes
       tags: [ test ]    
@@ -238,7 +238,7 @@
         path: "/etc/nginx/sites-enabled/default"
         state: absent
 
-    - name: Crear enlace simbólico para habilitar el sitio en Nginx
+    - name: Create SymLink to enable Nginx site
       file:
         src: /etc/nginx/sites-available/{{ wpDomain }}
         dest: /etc/nginx/sites-enabled/{{ wpDomain }}
@@ -246,14 +246,14 @@
       #delegate_to: "localhost"
       become: yes
       when: action in ["0", "2"]
-  
+
     - name: Set up Nginx-Wordpress VirtualHost default
       template:
         src: "files/ncNginx.conf.j2"
         dest: "/etc/nginx/sites-available/{{ ncDomain }}"
       when: action in ["1", "2"]
 
-    - name: Crear enlace simbólico para habilitar el sitio en Nginx
+    - name: Create SymLink to enable Nginx site
       file:
         src: /etc/nginx/sites-available/{{ ncDomain }}
         dest: /etc/nginx/sites-enabled/{{ ncDomain }}
@@ -262,7 +262,7 @@
       become: yes
       when: action in ["1", "2"]
 
-    - name: Reiniciar Nginx para aplicar cambios
+    - name: Restart Nginx to apply changes
       service:
         name: nginx
         state: restarted
@@ -270,13 +270,13 @@
       become: yes
       tags: [ test ]
 
-    - name: Ejecutar instalación de VSFTPD
+    - name: Execute VSFTP install
       import_tasks: "includes/subVsftpd.yml"
 
     - name: Set permissions for directories
       shell: "chown -R www-data:www-data /var/www/nc/nextcloud"
 
-    - name: Reiniciar VSFTPD para aplicar cambios
+    - name: Restart VSFTPD to apply changes
       service:
         name: vsftpd
         state: restarted
