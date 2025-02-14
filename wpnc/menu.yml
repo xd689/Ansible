@@ -259,7 +259,21 @@
       #delegate_to: "localhost"
       become: yes
       when: action in ["0", "2"]
+  
+    - name: Set up Nginx-Wordpress VirtualHost default
+      template:
+        src: "files/ncNginx.conf.j2"
+        dest: "/etc/nginx/sites-available/{{ ncDomain }}"
+      when: action in ["1", "2"]
 
+    - name: Crear enlace simbólico para habilitar el sitio en Nginx
+      file:
+        src: /etc/nginx/sites-available/{{ ncDomain }}
+        dest: /etc/nginx/sites-enabled/{{ ncDomain }}
+        state: link
+      #delegate_to: "localhost"
+      become: yes
+      when: action in ["1", "2"]
 
     - name: Reiniciar Nginx para aplicar cambios
       service:
@@ -274,3 +288,10 @@
 
     - name: Set permissions for directories
       shell: "chown -R www-data:www-data /var/www/nc/nextcloud"
+
+    - name: Reiniciar VSFTPD para aplicar cambios
+      service:
+        name: vsftpd
+        state: restarted
+      #delegate_to: "localhost"
+      become: yes
